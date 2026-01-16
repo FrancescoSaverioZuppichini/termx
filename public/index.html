@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg: #1e1e1e;
+      --fg: #d4d4d4;
+      --border: #444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { height: 100dvh; overflow: hidden; background: var(--bg); color: var(--fg); }
+    #terminal { height: 100%; }
+    #terminal .xterm { height: 100%; }
+    .session-name-input {
+      background: transparent;
+      border: 1px solid #007acc;
+      outline: none;
+      color: inherit;
+      padding: 0 4px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="h-[100dvh] flex flex-col">
+    <!-- Header -->
+    <header class="h-14 md:h-10 flex items-center px-3 md:px-4 justify-between shrink-0" style="background: var(--bg); border-bottom: 1px solid var(--border)">
+      <span class="text-sm font-medium truncate">Terminal</span>
+      <div class="flex items-center gap-2 md:gap-3">
+        <select id="theme-select" class="h-10 md:h-7 text-xs md:text-sm rounded px-2 cursor-pointer" style="background: var(--bg); color: var(--fg); border: 1px solid var(--border)"></select>
+        <button onclick="newSession()" class="w-10 h-10 md:w-7 md:h-7 hover:opacity-80 rounded flex items-center justify-center" style="border: 1px solid var(--border)">
+          <i data-lucide="plus" class="w-5 h-5 md:w-4 md:h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden relative">
+      <!-- Terminal Container -->
+      <main class="flex-1 overflow-hidden p-1">
+        <div id="terminal" class="h-full"></div>
+      </main>
+
+      <!-- Desktop Sidebar -->
+      <aside id="desktop-sidebar" class="hidden md:flex w-48 flex-col shrink-0" style="background: var(--bg); border-left: 1px solid var(--border)">
+        <div id="session-list-desktop" class="flex-1 overflow-y-auto py-2"></div>
+      </aside>
+    </div>
+
+    <!-- Mobile FAB -->
+    <button id="mobile-fab" onclick="toggleMobilePanel()" class="md:hidden fixed bottom-4 right-4 w-10 h-10 rounded-lg flex items-center justify-center z-40" style="background: var(--bg); border: 1px solid var(--border)">
+      <i data-lucide="terminal" class="w-5 h-5"></i>
+    </button>
+
+    <!-- Mobile Session Panel -->
+    <div id="mobile-panel" class="md:hidden fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-black/50" onclick="toggleMobilePanel()"></div>
+      <div class="absolute bottom-0 left-0 right-0 max-h-[60vh]  overflow-hidden" style="background: var(--bg); border-top: 1px solid var(--border)">
+        <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid var(--border)">
+          <span class="font-medium">Sessions</span>
+          <button onclick="toggleMobilePanel()" class="p-1 hover:opacity-80">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <div id="session-list-mobile" class="overflow-y-auto max-h-[calc(60vh-60px)] py-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="fixed hidden rounded py-1 min-w-[140px] z-50" style="background: var(--bg); border: 1px solid var(--border)">
+    <button onclick="renameSession()" class="w-full px-4 py-2 text-sm text-left hover:opacity-80 flex items-center gap-2">
+      <i data-lucide="pencil" class="w-4 h-4"></i>
+      Rename
+    </button>
+    <button onclick="deleteSession()" class="w-full px-4 py-2 text-sm text-left hover:opacity-80 flex items-center gap-2 text-red-400">
+      <i data-lucide="trash-2" class="w-4 h-4"></i>
+      Delete
+    </button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script>
+
+    const themes = {
+      'Dark': {
+        background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4', cursorAccent: '#1e1e1e',
+        black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510',
+        blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5',
+        brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543',
+        brightBlue: '#3b8eea', brightMagenta: '#d670d6', brightCyan: '#29b8db', brightWhite: '#ffffff'
+      },
+      'Dracula': {
+        background: '#282a36', foreground: '#f8f8f2', cursor: '#f8f8f2', cursorAccent: '#282a36',
+        black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c',
+        blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2',
+        brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5',
+        brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff'
+      },
+      'Monokai': {
+        background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f2', cursorAccent: '#272822',
+        black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75',
+        blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f8f8f2',
+        brightBlack: '#75715e', brightRed: '#f92672', brightGreen: '#a6e22e', brightYellow: '#f4bf75',
+        brightBlue: '#66d9ef', brightMagenta: '#ae81ff', brightCyan: '#a1efe4', brightWhite: '#f9f8f5'
+      },
+      'Nord': {
+        background: '#2e3440', foreground: '#d8dee9', cursor: '#d8dee9', cursorAccent: '#2e3440',
+        black: '#3b4252', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b',
+        blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0',
+        brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b',
+        brightBlue: '#81a1c1', brightMagenta: '#b48ead', brightCyan: '#8fbcbb', brightWhite: '#eceff4'
+      },
+      'Gruvbox': {
+        background: '#282828', foreground: '#ebdbb2', cursor: '#ebdbb2', cursorAccent: '#282828',
+        black: '#282828', red: '#cc241d', green: '#98971a', yellow: '#d79921',
+        blue: '#458588', magenta: '#b16286', cyan: '#689d6a', white: '#a89984',
+        brightBlack: '#928374', brightRed: '#fb4934', brightGreen: '#b8bb26', brightYellow: '#fabd2f',
+        brightBlue: '#83a598', brightMagenta: '#d3869b', brightCyan: '#8ec07c', brightWhite: '#ebdbb2'
+      },
+      'Tokyo Night': {
+        background: '#1a1b26', foreground: '#c0caf5', cursor: '#c0caf5', cursorAccent: '#1a1b26',
+        black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68',
+        blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6',
+        brightBlack: '#414868', brightRed: '#f7768e', brightGreen: '#9ece6a', brightYellow: '#e0af68',
+        brightBlue: '#7aa2f7', brightMagenta: '#bb9af7', brightCyan: '#7dcfff', brightWhite: '#c0caf5'
+      },
+      'Atom One Dark': {
+        background: '#282c34', foreground: '#abb2bf', cursor: '#528bff', cursorAccent: '#282c34',
+        black: '#282c34', red: '#e06c75', green: '#98c379', yellow: '#e5c07b',
+        blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#abb2bf',
+        brightBlack: '#545862', brightRed: '#e06c75', brightGreen: '#98c379', brightYellow: '#e5c07b',
+        brightBlue: '#61afef', brightMagenta: '#c678dd', brightCyan: '#56b6c2', brightWhite: '#c8ccd4'
+      },
+      'Catppuccin': {
+        background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#f5e0dc', cursorAccent: '#1e1e2e',
+        black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af',
+        blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de',
+        brightBlack: '#585b70', brightRed: '#f38ba8', brightGreen: '#a6e3a1', brightYellow: '#f9e2af',
+        brightBlue: '#89b4fa', brightMagenta: '#f5c2e7', brightCyan: '#94e2d5', brightWhite: '#a6adc8'
+      },
+      'Light': {
+        background: '#ffffff', foreground: '#383a42', cursor: '#383a42', cursorAccent: '#ffffff',
+        black: '#383a42', red: '#e45649', green: '#50a14f', yellow: '#c18401',
+        blue: '#4078f2', magenta: '#a626a4', cyan: '#0184bc', white: '#fafafa',
+        brightBlack: '#4f525e', brightRed: '#e06c75', brightGreen: '#98c379', brightYellow: '#e5c07b',
+        brightBlue: '#61afef', brightMagenta: '#c678dd', brightCyan: '#56b6c2', brightWhite: '#ffffff'
+      }
+    };
+
+    let savedTheme = localStorage.getItem('terminal-theme');
+    const term = new Terminal({ cursorBlink: true, theme: themes[savedTheme] || themes['Dark'], allowProposedApi: true });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById('terminal'));
+    fit.fit();
+
+    const themeSelect = document.getElementById('theme-select');
+
+    async function initTheme() {
+      if (!savedTheme) {
+        const cfg = await fetch('/config').then(r => r.json()).catch(() => ({}));
+        savedTheme = cfg.theme && themes[cfg.theme] ? cfg.theme : 'Dark';
+      }
+      if (!themes[savedTheme]) savedTheme = 'Dark';
+      applyTheme(savedTheme);
+      themeSelect.innerHTML = Object.keys(themes).map(t =>
+        `<option value="${t}"${t === savedTheme ? ' selected' : ''}>${t}</option>`
+      ).join('');
+    }
+    initTheme();
+
+    function applyTheme(name) {
+      const t = themes[name];
+      term.options.theme = t;
+      const root = document.documentElement;
+      root.style.setProperty('--bg', t.background);
+      root.style.setProperty('--fg', t.foreground);
+      root.style.setProperty('--border', name === 'Light' ? '#ccc' : '#444');
+      localStorage.setItem('terminal-theme', name);
+    }
+    applyTheme(savedTheme);
+    themeSelect.onchange = () => applyTheme(themeSelect.value);
+
+    let ws = null, currentSession = null, wsReady = false, connectionId = 0;
+    let contextMenuTarget = null, sessionCounter = 0, sessions = [];
+    let mobileOpen = false;
+
+    const sessionListDesktop = document.getElementById('session-list-desktop');
+    const sessionListMobile = document.getElementById('session-list-mobile');
+    const contextMenu = document.getElementById('context-menu');
+    const mobilePanel = document.getElementById('mobile-panel');
+
+    function toggleMobilePanel() {
+      mobileOpen = !mobileOpen;
+      mobilePanel.classList.toggle('hidden', !mobileOpen);
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function renderSessions() {
+      const html = sessions.map(s => {
+        const safe = escapeHtml(s.name);
+        const active = s.name === currentSession ? 'opacity-100' : 'opacity-70 hover:opacity-100';
+        return `
+          <div class="session-item flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors ${active}"
+               data-session="${safe}"
+               onclick="connectByIndex(${sessions.indexOf(s)}); if(window.innerWidth < 768) toggleMobilePanel();"
+               oncontextmenu="showContextMenuByIndex(event, ${sessions.indexOf(s)})">
+            <i data-lucide="terminal-square" class="w-4 h-4 shrink-0 opacity-60"></i>
+            <span class="session-name text-sm truncate">${safe}</span>
+          </div>
+        `;
+      }).join('');
+      sessionListDesktop.innerHTML = html;
+      sessionListMobile.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function connectByIndex(i) { if (sessions[i]) connect(sessions[i].name); }
+    function showContextMenuByIndex(e, i) { if (sessions[i]) showContextMenu(e, sessions[i].name); }
+
+    async function refreshSessions() {
+      const res = await fetch('/sessions');
+      sessions = await res.json();
+      sessions.forEach(s => {
+        const match = s.name.match(/^Terminal (\d+)$/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > sessionCounter) sessionCounter = num;
+        }
+      });
+      renderSessions();
+      if (sessions.length && !currentSession) connect(sessions[0].name);
+    }
+
+    function getNextSessionName() {
+      sessionCounter++;
+      return `Terminal ${sessionCounter}`;
+    }
+
+    async function newSession() {
+      const name = getNextSessionName();
+      await fetch('/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      await refreshSessions();
+      connect(name);
+    }
+
+    function showContextMenu(e, sessionName) {
+      e.preventDefault();
+      contextMenuTarget = sessionName;
+      contextMenu.style.left = Math.min(e.clientX, window.innerWidth - 150) + 'px';
+      contextMenu.style.top = Math.min(e.clientY, window.innerHeight - 100) + 'px';
+      contextMenu.classList.remove('hidden');
+    }
+
+    document.addEventListener('click', () => contextMenu.classList.add('hidden'));
+
+    function renameSession() {
+      if (!contextMenuTarget) return;
+      contextMenu.classList.add('hidden');
+      const item = document.querySelector(`[data-session="${contextMenuTarget}"]`);
+      if (!item) return;
+      const nameSpan = item.querySelector('.session-name');
+      const oldName = contextMenuTarget;
+      nameSpan.innerHTML = `<input type="text" class="session-name-input" value="${oldName}">`;
+      const input = nameSpan.querySelector('input');
+      input.focus();
+      input.select();
+
+      const finishRename = async () => {
+        const newName = input.value.trim();
+        if (newName && newName !== oldName) {
+          await fetch(`/sessions/${oldName}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+          });
+          if (currentSession === oldName) currentSession = newName;
+          await refreshSessions();
+        } else {
+          nameSpan.textContent = oldName;
+        }
+      };
+
+      input.addEventListener('blur', finishRename);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+        else if (e.key === 'Escape') nameSpan.textContent = oldName;
+      });
+    }
+
+    async function deleteSession() {
+      contextMenu.classList.add('hidden');
+      const name = contextMenuTarget || currentSession;
+      if (!name || name === 'default') return;
+      await fetch('/sessions/' + name, { method: 'DELETE' });
+      if (currentSession === name) currentSession = null;
+      await refreshSessions();
+    }
+
+    function disconnect() {
+      wsReady = false;
+      if (ws) {
+        ws.onclose = ws.onerror = ws.onmessage = ws.onopen = null;
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function connect(session) {
+      if (currentSession === session && ws && ws.readyState === WebSocket.OPEN) return;
+      disconnect();
+      connectionId++;
+      const thisConnectionId = connectionId;
+      currentSession = session;
+      renderSessions();
+      term.reset();
+
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws/${session}?resize=${term.cols},${term.rows}`);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        if (connectionId === thisConnectionId) setTimeout(() => { if (connectionId === thisConnectionId) wsReady = true; }, 50);
+      };
+      ws.onmessage = (e) => {
+        if (connectionId !== thisConnectionId) return;
+        term.write(e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : e.data);
+      };
+      ws.onclose = () => {
+        if (connectionId === thisConnectionId) { ws = null; wsReady = false; term.write('\r\n[disconnected]\r\n'); }
+      };
+      ws.onerror = (e) => console.error('WebSocket error:', e);
+    }
+
+    term.onData(data => { if (ws && ws.readyState === WebSocket.OPEN && wsReady) ws.send(data); });
+
+    let resizeTimeout;
+    function doResize() {
+      fit.fit();
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }, 100);
+    }
+
+    window.onresize = doResize;
+    new ResizeObserver(doResize).observe(document.getElementById('terminal'));
+
+    lucide.createIcons();
+    refreshSessions();
+  </script>
+</body>
+</html>
