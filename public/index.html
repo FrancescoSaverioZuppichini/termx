@@ -32,7 +32,7 @@
     <header class="h-14 md:h-10 flex items-center px-3 md:px-4 justify-between shrink-0" style="background: var(--bg); border-bottom: 1px solid var(--border)">
       <span class="text-sm font-medium truncate">Terminal</span>
       <div class="flex items-center gap-2 md:gap-3">
-        <select id="theme-select" class="h-10 md:h-7 text-xs md:text-sm rounded px-2 cursor-pointer" style="background: var(--bg); color: var(--fg); border: 1px solid var(--border)"></select>
+        <select id="theme-select" class="h-10 md:h-7 text-xs md:text-sm rounded pl-3 pr-10 cursor-pointer appearance-none bg-no-repeat" style="background-color: var(--bg); color: var(--fg); border: 1px solid var(--border); background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-position: right 12px center;"></select>
         <button onclick="newSession()" class="w-10 h-10 md:w-7 md:h-7 hover:opacity-80 rounded flex items-center justify-center" style="border: 1px solid var(--border)">
           <i data-lucide="plus" class="w-5 h-5 md:w-4 md:h-4"></i>
         </button>
@@ -185,7 +185,6 @@
       root.style.setProperty('--border', name === 'Light' ? '#ccc' : '#444');
       localStorage.setItem('terminal-theme', name);
     }
-    applyTheme(savedTheme);
     themeSelect.onchange = () => applyTheme(themeSelect.value);
 
     let ws = null, currentSession = null, wsReady = false, connectionId = 0;
@@ -222,15 +221,23 @@
       }).join('');
       sessionListDesktop.innerHTML = html;
       sessionListMobile.innerHTML = html;
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     function connectByIndex(i) { if (sessions[i]) connect(sessions[i].name); }
     function showContextMenuByIndex(e, i) { if (sessions[i]) showContextMenu(e, sessions[i].name); }
 
-    async function refreshSessions() {
-      const res = await fetch('/sessions');
-      sessions = await res.json();
+    async function refreshSessions(retries = 3) {
+      try {
+        const res = await fetch('/sessions');
+        sessions = await res.json();
+      } catch {
+        sessions = [];
+      }
+      if (!sessions.length && retries > 0) {
+        await new Promise(r => setTimeout(r, 300));
+        return refreshSessions(retries - 1);
+      }
       sessions.forEach(s => {
         const match = s.name.match(/^Terminal (\d+)$/);
         if (match) {
@@ -360,7 +367,11 @@
     window.onresize = doResize;
     new ResizeObserver(doResize).observe(document.getElementById('terminal'));
 
-    lucide.createIcons();
+    function tryCreateIcons() {
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      else setTimeout(tryCreateIcons, 100);
+    }
+    tryCreateIcons();
     refreshSessions();
   </script>
 </body>
