@@ -3,7 +3,7 @@
 <head>
   <title>Terminal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -53,9 +53,17 @@
     </div>
 
     <!-- Mobile FAB -->
-    <button id="mobile-fab" onclick="toggleMobilePanel()" class="md:hidden fixed bottom-4 right-4 w-10 h-10 rounded-lg flex items-center justify-center z-40" style="background: var(--bg); border: 1px solid var(--border)">
-      <i data-lucide="terminal" class="w-5 h-5"></i>
-    </button>
+    <div class="md:hidden fixed bottom-4 right-4 flex flex-col gap-2 z-40">
+      <button onclick="scrollTerminal(-5)" class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg); border: 1px solid var(--border)">
+        <i data-lucide="chevron-up" class="w-5 h-5"></i>
+      </button>
+      <button onclick="scrollTerminal(5)" class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg); border: 1px solid var(--border)">
+        <i data-lucide="chevron-down" class="w-5 h-5"></i>
+      </button>
+      <button id="mobile-fab" onclick="toggleMobilePanel()" class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg); border: 1px solid var(--border)">
+        <i data-lucide="terminal" class="w-5 h-5"></i>
+      </button>
+    </div>
 
     <!-- Mobile Session Panel -->
     <div id="mobile-panel" class="md:hidden fixed inset-0 z-50 hidden">
@@ -84,8 +92,8 @@
     </button>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/lib/addon-fit.min.js"></script>
   <script>
 
     const themes = {
@@ -155,7 +163,7 @@
     };
 
     let savedTheme = localStorage.getItem('terminal-theme');
-    const term = new Terminal({ cursorBlink: true, theme: themes[savedTheme] || themes['Dark'], allowProposedApi: true });
+    const term = new Terminal({ cursorBlink: true, scrollback: 5000, theme: themes[savedTheme] || themes['Dark'], allowProposedApi: true });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(document.getElementById('terminal'));
@@ -199,6 +207,17 @@
     function toggleMobilePanel() {
       mobileOpen = !mobileOpen;
       mobilePanel.classList.toggle('hidden', !mobileOpen);
+    }
+
+    function scrollTerminal(direction) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      // Send mouse wheel escape sequence to tmux
+      // Mouse wheel up: \x1b[M`XX  (button 64)
+      // Mouse wheel down: \x1b[MaXX (button 65)
+      const btn = direction < 0 ? 64 : 65;
+      const x = 1, y = 1;
+      const seq = `\x1b[M${String.fromCharCode(32 + btn)}${String.fromCharCode(32 + x)}${String.fromCharCode(32 + y)}`;
+      for (let i = 0; i < Math.abs(direction); i++) ws.send(seq);
     }
 
     function escapeHtml(str) {

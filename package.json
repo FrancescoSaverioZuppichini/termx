@@ -1,6 +1,6 @@
 {
   "name": "@zuppif/termx",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
   "bin": {
     "termx": "./src/index.ts"

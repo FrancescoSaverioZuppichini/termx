@@ -71,6 +71,7 @@ export async function sendCommand<T extends Command>(cmd: T): Promise<CommandRes
       const args = ["new-session", "-d", "-s", cmd.name, "-x", "120", "-y", "30"];
       if (cmd.cwd) args.push("-c", cmd.cwd);
       const { ok } = await tmux(...args);
+      if (ok) await tmux("set-option", "-t", cmd.name, "mouse", "on");
       return ok as CommandResult<T>;
     }
 
