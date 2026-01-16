@@ -2,6 +2,21 @@
 
 Web-based terminal server using Bun + Hono + tmux. Run it anywhere, get a browser terminal.
 
+**Mobile-optimized** — perfect for sandboxes, cloud environments, and using AI assistants on the go.
+
+![termx main interface](media/main.png)
+
+![termx mobile interface](media/mobile.png)
+
+## Quick Start (no install)
+
+```bash
+bunx @zuppif/termx
+bunx @zuppif/termx -p 3000
+bunx @zuppif/termx -p 8080 -t Dracula
+bunx @zuppif/termx --port 3000 --theme "Tokyo Night"
+```
+
 ## Install
 
 ```bash
